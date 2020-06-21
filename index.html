@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sri Lanka Population Cartogram</title>
+    <meta charset="utf-8">
+    <script src="lib/d3.js"></script>
+    <script src="lib/topojson.js"></script>
+    <script src="lib/cartogram.js"></script>
+    <style type="text/css">
+
+     #map-container {
+        height: 650px;
+        text-align: center;
+        position: relative;
+        margin: 20px 0;
+      }
+
+      #map {
+        display: block;
+        position: absolute;
+        background: #fff;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      #click_to_run {
+        color:#888;
+        width: auto;
+        font-size: 2em;
+        text-align: center;
+        cursor: pointer;
+        padding-top: 30px;
+      }
+      path.munic {
+        stroke: #AAA;
+        stroke-width: .5;
+      }
+      path.munic:hover {
+        stroke: #000;
+      }
+
+      .container,
+      .container-fluid {
+        width: 600px;
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <p>This Cartogram uses <a href="https://github.com/shawnbot/d3-cartogram/">cartogram.js</a>, <a href="http://d3js.org/">d3js</a> and <a href="https://github.com/mbostock/topojson">topojson.js</a>. <a href="http://www.limn.co.za/2013/10/making-a-cartogram/">Making a cartogram</a> blog post was very helpful. </p>
+    <p>Thanks a lot <a href="https://github.com/mbostock">mbostock</a> and <a href="https://github.com/shawnbot">shawnbot</a> for cool libraries! You can fork this project from <a href="https://github.com/dedunumax/sri-lanka-cartogram">here</a>.</p>
+
+    <div class='container' id="container">
+
+        <center>
+         <div id="click_to_run" onclick="do_update()">
+          ...
+        </div>
+        <div id="map-container">
+          <svg id="map"></svg>
+        </div></center>
+        <script>
+
+        var color = d3.scale.category10();
+
+        var map = d3.select("#map");
+
+        var munics = map.append("g")
+            .attr("id", "states")
+            .selectAll("path");
+
+
+        var width = 600,
+            height = 600,
+            centered;
+
+        var proj = d3.geo.albers()
+            .center([1, 8])
+            .rotate([-80, 0])
+            .scale(2000 *5)
+            .translate([width / 2, height / 2]);
+
+        var topology,
+            geometries,
+            carto_features;
+
+        var vote_data = d3.map();
+
+        var carto = d3.cartogram()
+            .projection(proj)
+            .properties(function (d) {
+                // this add the "properties" properties to the geometries
+                return d.properties;
+            });
+
+        // Load sri-lanka.csv
+        d3.csv("data/sri-lanka.csv", function (data) {
+            data.forEach(function (d) {
+                vote_data.set(d.DISTRICT, [d.POPULATION, d.COLOR]);
+            })
+        });
+
+         // This loads test the topojson file and creates the map.
+        d3.json("data/sri-lanka.json", function (data) {
+            topology = data;
+            geometries = topology.objects.states.geometries;
+
+            var neighbors = topojson.neighbors(topology.objects.states.geometries);
+
+            var features = carto.features(topology, geometries),
+                path = d3.geo.path()
+                    .projection(proj);
+
+            munics = munics.data(features)
+                .enter()
+                .append("path")
+                .attr("class", "states")
+                .attr("id", function (d) {
+                    return d.properties.name;
+                })
+                .style("fill", function(d, i) { return color(d.color = d3.max(neighbors[i], function(n) { return features[n].color; }) + 1 | 0); })
+                .attr("d", path);
+
+            munics.append("title")
+                .text(function (d) {
+                    return d.properties.name;
+                });
+
+            d3.select("#click_to_run").text("click here to run");
+        });
+
+        function do_update() {
+            d3.select("#click_to_run").text("processing...");
+            setTimeout(function () {
+
+                // This sets the value to use for scaling, per district.
+                carto.value(function (d) {
+                    return +vote_data.get(d.properties["name"])[0];
+                });
+
+
+                if (carto_features == undefined)
+                    // this regenrates the topology features for the new map based on
+                    carto_features = carto(topology, geometries).features;
+
+                // update the map data
+                munics.data(carto_features)
+                    .select("title")
+                    .text(function (d) {
+                        return d.properties.name + ", " + vote_data.get(d.properties["name"])[0];
+                    });
+
+                munics.transition()
+                    .duration(750)
+                    .each("end", function () {
+                        d3.select("#click_to_run").text("")
+                    })
+                    .attr("d", carto.path);
+            }, 10);
+        }
+    </script>
+
+
+
+
+
+  </div>
+</body>
+</html>
